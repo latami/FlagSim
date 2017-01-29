@@ -1,0 +1,10 @@
+To run, type "./FlagSim" in a directory where executable resides.
+
+To print options, type "./flagSim -h".
+
+Lessons learned:
+- System is extremely stiff, so implicit euler would probably be better than
+  explicit integrators.
+- Don't connect nodes with pointers. It makes connecting nodes flexible, but
+  a lot of performance is lost in pointer chasing.
+- Calculating pending with faces would probably be better.
