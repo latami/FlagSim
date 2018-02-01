@@ -46,7 +46,7 @@
 #include <unistd.h>
 
 #include <GL/gl.h>
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 
 #include <pthread.h>
 
@@ -138,7 +138,7 @@ void eventHandling(SDL_Event *event, struct gfThreadData *thData) {
     }
 }
 
-int initVideo(SDL_Surface **surface, SDL_VideoInfo const **videoInfo) {
+int initVideo(SDL_Window **surface, SDL_GLContext *GL_Ctx) {
     double fovRadian = 0.7854, drawNear = 0.1, drawFar = 100.0, drawTop, drawRight;
 
     GLfloat sun_emission[] = { 1.0, 1.0, 1.0, 1 };
@@ -150,27 +150,28 @@ int initVideo(SDL_Surface **surface, SDL_VideoInfo const **videoInfo) {
         return EXIT_FAILURE;
     }
 
-    (*videoInfo) = SDL_GetVideoInfo();
-    if ( !(*videoInfo) ) {
-        fprintf(stderr, "Video query failed: %s\n", SDL_GetError());
-        SDL_Quit();
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+    (*surface) = SDL_CreateWindow("Flag simulation",
+                                  SDL_WINDOWPOS_UNDEFINED,
+                                  SDL_WINDOWPOS_UNDEFINED,
+                                  SCREENW, SCREENH,
+                                  SDL_WINDOW_OPENGL);
+    if (surface == NULL) {
+        fprintf(stderr, "Failed to create window!");
         return EXIT_FAILURE;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-    (*surface) = SDL_SetVideoMode(SCREENW, SCREENH, 0, SDL_OPENGL);
+    (*GL_Ctx) = SDL_GL_CreateContext((*surface));
+    if ((*GL_Ctx) == NULL) {
+        fprintf(stderr, "Creating OpenGL context failed!");
+        return EXIT_FAILURE;
+    }
 
     GLint dBuffer;
     SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &dBuffer);
     if (!dBuffer)
         fprintf(stderr, "Couldn't set doublebuffering!\n");
-
-    if ( !(*surface) ) {
-        fprintf(stderr, "Video mode set failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        return EXIT_FAILURE;
-    }
 
     glShadeModel(GL_SMOOTH);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -194,8 +195,6 @@ int initVideo(SDL_Surface **surface, SDL_VideoInfo const **videoInfo) {
     drawRight = ((double)SCREENW/(double)SCREENH) * drawTop;
     glFrustum(-drawRight, drawRight, -drawTop, drawTop, drawNear, drawFar);
     glMatrixMode(GL_MODELVIEW);
-
-    SDL_WM_SetCaption("Flag simulation", "");
 
     return EXIT_SUCCESS;
 }
@@ -280,14 +279,14 @@ void drawPole(Node *pole) {
 void drawGraphics(void *arguments) {
     struct gfThreadData *threadData;
 
-    const SDL_VideoInfo *videoInfo;
-    SDL_Surface *surface;
+    SDL_Window *surface;
+    SDL_GLContext glcontext;
     SDL_Event event;
 
     threadData = (struct gfThreadData *) arguments;
 
     /* Test that we get graphics */
-    if ( initVideo(&surface, &videoInfo) != EXIT_SUCCESS ) {
+    if ( initVideo(&surface, &glcontext) != EXIT_SUCCESS ) {
         threadData->exitFlag = 1;
         /* Do we need SDL_Quit() if video init fails? */
         return;
@@ -318,10 +317,11 @@ void drawGraphics(void *arguments) {
         drawPole(threadData->assembly);
         pthread_mutex_unlock(threadData->lockPtr);
 
-        SDL_GL_SwapBuffers();
+        SDL_GL_SwapWindow(surface);
         eventHandling(&event, threadData);
         SDL_Delay(16); /* Just a dumb wait */
     }
+    SDL_GL_DeleteContext(glcontext);
     SDL_Quit();
 }
 
